@@ -1,9 +1,13 @@
 #include <MAX30100_PulseOximeter.h>
 #include <SoftwareSerial.h>
+#include <Wire.h>
  
 #define REPORTING_PERIOD_MS     1000
-SoftwareSerial pulseSerial(14, 15); //RX,TX
+SoftwareSerial pulseSerial(16, 10); //RX,TX KE ARDUINO
+//SoftwareSerial gpsSerial(16,10); //RX,TX GPS MODUL
+ 
 PulseOximeter pox;
+
 uint32_t tsLastReport = 0;
 long startMillis, currentMillis;
 const long period = 20000;
@@ -11,7 +15,7 @@ int BPM, SPO2;
 int maxBpm, minBpm;
 int maxSpo, minSpo;
 int count;
- 
+
 void onBeatDetected()
 {
     Serial.println("Beat!");    
@@ -19,8 +23,9 @@ void onBeatDetected()
  
 void setup()
 {
-  Serial.begin(9200);
-  pulseSerial.begin(57600);
+  Wire.begin(2,0);
+  Serial.begin(9200);         
+  pulseSerial.begin(9600);
   Serial.print("Initializing pulse oximeter..");
 
   // Initialize the PulseOximeter instance
@@ -31,7 +36,8 @@ void setup()
       for(;;);
   } else {
       Serial.println("SUCCESS");
-  }     
+  }
+         
 }
  
 void loop()
@@ -40,13 +46,11 @@ void loop()
   pox.update();
   if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
     BPM = pox.getHeartRate();
-    SPO2 = pox.getSpO2();      
-    Serial.print("Real Time Heart rate:");
-    Serial.print(BPM);
+    SPO2 = pox.getSpO2();          
+    Serial.print("Real Time Heart rate:");    
     Serial.print("bpm / SpO2:");
-    Serial.print(SPO2);
-    Serial.println("%");    
-    tsLastReport = millis();     
+    Serial.print(BPM);Serial.print("/");Serial.print(SPO2);        
+    Serial.println("%");             
     if(pox.getHeartRate() > 0 && pox.getSpO2() > 0){      
       count++;      
       if(count > 10){        
@@ -55,29 +59,12 @@ void loop()
       }      
     }else{
       count = 0;
-    }
-    Serial.print("Max Bpm :");
-    Serial.print(maxBpm);
-    Serial.print(" Min Bpm :");
-    Serial.println(minBpm);
+    }    
+    String dataHasil = String(BPM)+","+String(SPO2)+","+String(maxBpm)+","+String(minBpm)+","+String(maxSpo)+","+String(minSpo);
+    pulseSerial.println(dataHasil);
 
-    Serial.print("Max Spo2 :");
-    Serial.print(maxSpo);
-    Serial.print(" Min Spo2 :");
-    Serial.println(minSpo);
-    
-//    pulseSerial.println(maxBpm+","+maxSpo);
-
-    pulseSerial.print(0xAA); pulseSerial.print(":");
-    pulseSerial.print(BPM); pulseSerial.print(":");
-    pulseSerial.print(SPO2); pulseSerial.print(":");
-    pulseSerial.print(maxBpm); pulseSerial.print(":");
-    pulseSerial.print(minBpm); pulseSerial.print(":");
-    pulseSerial.print(maxSpo); pulseSerial.print(":");
-    pulseSerial.print(minSpo); pulseSerial.print(":");
-    pulseSerial.println(0xAA);
-    
-  }
+    tsLastReport = millis();     
+  }            
 }
 
 void rangeBPM(int data){

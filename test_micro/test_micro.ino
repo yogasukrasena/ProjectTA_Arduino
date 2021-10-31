@@ -3,30 +3,32 @@
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
 
 //serial tx(16) dan rx (17) untuk nodemcu
-#define wifiSerial Serial2
+SoftwareSerial wifiSerial(2,3);
+//#define wifiSerial Serial2
 
 // serial tx(14) dan rx(15) untuk finggerprint
-#define fpSerial Serial3
+SoftwareSerial fpSerial(4,5);
+//#define fpSerial Serial3
 
 //ultrasonic define pin
-#define echoFront A2 //echo pin
+#define echoFront A0 //echo pin
 #define trigFront A1 //trig pin
-#define echoRight A4
+#define echoRight A2
 #define trigRight A3 
-#define echoLeft A6 
-#define trigLeft A5 
+#define echoLeft 15 
+#define trigLeft 14 
 
-const int soilPin = A0; 
-const int buttonPin = 2;     // the number of the pushbutton pin
+const int soilPin = 16; 
+const int buttonPin = 10;     // the number of the pushbutton pin
 const int buzzer = 9;        // buzzer to arduino pin 9
-const int ledPin =  13;      // the number of the LED pin
 
 //vibration pin
-const int vibFront = 3;
-const int vibRight = 4;
-const int vibLeft = 5;
+const int vibFront = 8;
+const int vibRight = 7;
+const int vibLeft = 6;
 
 //variabel timer on alat
 unsigned long milisec;
@@ -82,8 +84,7 @@ void setup()
     Serial.print("Sensor contains "); Serial.print(finger.templateCount); Serial.println(" templates");    
   }
 
-  // initialize the pushbutton pin and buzzer
-  pinMode(ledPin, OUTPUT);
+  // initialize the pushbutton pin and buzzer  
   pinMode(buzzer, OUTPUT);  
   pinMode(buttonPin, INPUT);
 
@@ -608,7 +609,7 @@ void loop() {
     wifiSerial.println(Button());    
     Serial.println(dataID);
     Serial.println("---------------------------------");
-    mainFunction();    
+    mainFunction();
     delay(100);    
     while(wifiSerial.available()>0) {
       String data = wifiSerial.readString();

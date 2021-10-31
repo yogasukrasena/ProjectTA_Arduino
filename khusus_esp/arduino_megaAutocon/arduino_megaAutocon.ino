@@ -1,89 +1,94 @@
+#include <SoftwareSerial.h>
 #include <Adafruit_Fingerprint.h>
 #include <TinyGPS++.h>
-#include <ArduinoJson.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
 
-//serial tx(16) dan rx (17) untuk nodemcu
-#define wifiSerial Serial2
+//SoftwareSerial fpSerial(2,3);//RX,TX
+//SoftwareSerial espSerial(4,5);
+//SoftwareSerial pulseSerial(6,7);
 
-// serial tx(14) dan rx(15) untuk finggerprint
-#define fpSerial Serial3
+#define espSerial Serial1
+#define pulseSerial Serial2
+#define gpsSerial Serial3
+SoftwareSerial fpSerial(10,11);
 
-//ultrasonic define pin
-#define echoFront A2 //echo pin
-#define trigFront A1 //trig pin
-#define echoRight A4
-#define trigRight A3 
-#define echoLeft A6 
-#define trigLeft A5 
+//ultrasonic define pin 
+#define echoFront A5 //echo pin
+#define trigFront A4 //trig pin
+#define echoRight A3
+#define trigRight A2 
+#define echoLeft A0 
+#define trigLeft A1  
 
-const int soilPin = A0; 
-const int buttonPin = 2;     // the number of the pushbutton pin
-const int buzzer = 9;        // buzzer to arduino pin 9
-const int ledPin =  13;      // the number of the LED pin
+#define soilPin A6 
+#define buttonPin 2
+#define buzzer 3
 
 //vibration pin
-const int vibFront = 3;
-const int vibRight = 4;
-const int vibLeft = 5;
-
-//variabel timer on alat
-unsigned long milisec;
-unsigned long detik;
-unsigned long menit;
-unsigned long jam;
-
-boolean sidikJari = false;
-
-// id untuk fingerprint
-int id;
-String dataID;
-String separator = ",";
+#define vibFront 4
+#define vibRight 5
+#define vibLeft 6
 
 // variables will change:
-int buttonState = 0;
-int soilValue;
-int fingerID;
-int fingerValid;
-int buttonValue;
-int kondisi;
-int dataInt;
-int statusDevice;
+int buttonState = 0, cekfinger = 0;
+int soilValue, buttonValue;
+// variabel gps;
+float latVar, lngVar;
+int gpsStatus;
+// variabel untuk fingerprint
+boolean sidikJari = false;
+int id, fingerID;
+String dataID, dataPulse;
+String separator = ":";
+//variabel interval waktu
+long previousMillis = 0;
+long interval = 1000;
+unsigned long currentMillis;
 
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&fpSerial);
+TinyGPSPlus gps;
 
-void setup()
-{
-  Serial.begin(9600);
-  wifiSerial.begin(9600);  
-    
-  finger.begin(57600);  
-  if (finger.verifyPassword()) {
-    Serial.println("Found fingerprint sensor!");
-  } else {
-    Serial.println("Did not find fingerprint sensor :(");
-    while (1) { delay(1); }
+void setup() {  
+  Serial.begin(9600);    
+  finger.begin(57600);
+  // cek id fingerprint  
+  for (int finger = 1; finger < 6; finger++) {    
+    if(cekfinger == 1){
+      finger = finger-1;      
+    }
+    downloadFingerprintTemplate(finger);      
   }
-  // cek id fingerprint
-  for (int finger = 1; finger < 10; finger++) {
-    downloadFingerprintTemplate(finger);
-  }
-
   finger.getTemplateCount();
-
   if (finger.templateCount == 0) {
     Serial.print("Sensor doesn't contain any fingerprint data. Please run the 'enroll' example.");
     id = 1;
     enrollFinger();    
-  }
-  else {
+  }else {
     Serial.println("Waiting for valid finger...");
-    Serial.print("Sensor contains "); Serial.print(finger.templateCount); Serial.println(" templates");    
+    Serial.print("Sensor contains "); 
+    Serial.print(finger.templateCount); 
+    Serial.println(" templates");
+    tone(buzzer,1000);delay(200);
+    noTone(buzzer);delay(200);
+    tone(buzzer,1000);delay(200);
+    noTone(buzzer);      
   }
+  if (finger.verifyPassword()) {
+    Serial.println("Found fingerprint sensor!");           
+    while(!sidikJari){
+      espSerial.print("rollFinger,");
+      espSerial.println("noneAction");  
+      fingerID = getFingerprintID();
+    }   
+  } else {
+    Serial.println("Did not find fingerprint sensor :(");
+    while (1) { delay(1); }
+  }
+      
+  espSerial.begin(9600);  
+  pulseSerial.begin(9600);
+  gpsSerial.begin(9600);  
 
-  // initialize the pushbutton pin and buzzer
-  pinMode(ledPin, OUTPUT);
+   // initialize the pushbutton pin and buzzer  
   pinMode(buzzer, OUTPUT);  
   pinMode(buttonPin, INPUT);
 
@@ -99,21 +104,10 @@ void setup()
   pinMode(echoRight, INPUT); 
   pinMode(trigLeft, OUTPUT); 
   pinMode(echoLeft, INPUT); 
-  
 }
 //-----------REBOOT SYSTEM------------
 void(* rebootSystem) (void) = 0;
 
-//--------read input serial---------
-int readnumber(void) {
-  int num = 0;
-
-  while (num == 0) {
-    while (! wifiSerial.available());
-    num = dataInt;
-  }
-  return num;
-}
 //----------------------Cek ID Finger---------------------------------
 uint8_t downloadFingerprintTemplate(uint16_t id)
 {
@@ -124,12 +118,15 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
     case FINGERPRINT_OK:
       Serial.print("Template "); Serial.print(id); Serial.println(" loaded");
       dataID += id+separator;
+      cekfinger = 0;
       break;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
+      cekfinger = 1;
       return p;
     default:
       Serial.print("Unknown error "); Serial.println(p);
+      cekfinger = 0;
       return p;
   }
 
@@ -157,8 +154,6 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
           bytesReceived[i++] = fpSerial.read();
       }
   }
-//  Serial.print(i); Serial.println(" bytes read.");
-//  Serial.println("Decoding packet...");
 
   uint8_t fingerTemplate[512]; // the real template
   memset(fingerTemplate, 0xff, 512);
@@ -176,47 +171,55 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
       uindx = index + 9;
   }
 }
-
-void printHex(int num, int precision) {
-    char tmp[16];
-    char format[128];
-
-    sprintf(format, "%%.%dX", precision);
-
-    sprintf(tmp, format, num);
-    Serial.print(tmp);
-}
 //----------------------End Cek ID Finger---------------------------------
 //-------------fungsi ENROLL atau mendaftarkan finggerprint pengguna----------------
-void enrollFinger(){  
+void enrollFinger(){
+  delay(1000);
+  finger.begin(57600);  
   Serial.println("Ready to enroll a fingerprint!");
   Serial.println("Please type in the ID # (from 1 to 127) you want to save this finger as..."); 
   if (id == 0) {// ID #0 not allowed, try again!
      return;
-  }
-  if (id == 334){
-     sidikJari = false;
-     fingerID = 0;
-     rebootSystem();      
-  }   
+  }    
   Serial.print("Enrolling ID #");
   Serial.println(id);
   
-  while(! getFingerprintEnroll() );   
+  while(! getFingerprintEnroll());
 }
 
 uint8_t getFingerprintEnroll() {
-
   int p = -1;
   Serial.print("Waiting for valid finger to enroll as #"); Serial.println(id);
   while (p != FINGERPRINT_OK) {
     p = finger.getImage();
     switch (p) {
     case FINGERPRINT_OK:
-      Serial.println("Image taken");
+      Serial.println("Image taken");       
+      espSerial.print("rollFinger,");
+      espSerial.println("firstDone");
+      delay(1000);           
       break;
     case FINGERPRINT_NOFINGER:          
-      Serial.println(".");
+      Serial.print(".");
+      currentMillis = millis();
+      if(currentMillis - previousMillis > interval){
+        previousMillis = currentMillis;
+        espSerial.print("rollFinger,");
+        espSerial.println("firstPlace");
+      }      
+      while(espSerial.available()){
+        espSerial.setTimeout(100);       
+        String d = espSerial.readString();
+         if(d.startsWith("cancel")){
+          d.replace("cancel","");
+          id = d.toInt();
+        }
+      }
+      if (id == 334){
+        espSerial.print("rollFinger,");
+        espSerial.println("noneAction");         
+        rebootSystem();      
+      }
       break;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
@@ -231,7 +234,6 @@ uint8_t getFingerprintEnroll() {
   }
 
   // OK success!
-
   p = finger.image2Tz(1);
   switch (p) {
     case FINGERPRINT_OK:
@@ -271,6 +273,12 @@ uint8_t getFingerprintEnroll() {
       break;
     case FINGERPRINT_NOFINGER:
       Serial.print(".");
+      currentMillis = millis();
+      if(currentMillis - previousMillis > interval){
+        previousMillis = currentMillis;
+        espSerial.print("rollFinger,");
+        espSerial.println("placeAgain");
+      }                  
       break;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
@@ -285,7 +293,6 @@ uint8_t getFingerprintEnroll() {
   }
 
   // OK success!
-
   p = finger.image2Tz(2);
   switch (p) {
     case FINGERPRINT_OK:
@@ -310,44 +317,86 @@ uint8_t getFingerprintEnroll() {
 
   // OK converted!
   Serial.print("Creating model for #");  Serial.println(id);
-
   p = finger.createModel();
-  if (p == FINGERPRINT_OK) {
-    Serial.println("Prints matched!");
-  } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
-    Serial.println("Communication error");
-    return p;
-  } else if (p == FINGERPRINT_ENROLLMISMATCH) {
-    Serial.println("Fingerprints did not match");
-    return p;
-  } else {
-    Serial.println("Unknown error");
-    return p;
+  while(p != FINGERPRINT_OK){
+   switch(p) {
+      case FINGERPRINT_OK:
+        Serial.println("Prints matched!");
+        break;
+      case FINGERPRINT_PACKETRECIEVEERR:
+        Serial.println("Communication error");
+        break;
+      case FINGERPRINT_ENROLLMISMATCH:              
+        if(espSerial.available()>0){
+          espSerial.setTimeout(100);                
+          String d = espSerial.readString();
+           if(d.startsWith("done")){
+            d.replace("done","");
+            id = d.toInt();
+          }      
+        }else if(id == 334){
+          espSerial.print("rollFinger,");
+          espSerial.println("noneAction");
+          rebootSystem();          
+        }else{
+          Serial.println("Fingerprints did not match");
+          currentMillis = millis();
+          if(currentMillis - previousMillis > interval){
+            previousMillis = currentMillis;                     
+            espSerial.print("rollFinger,");
+            espSerial.println("enFail"); 
+          }          
+        }
+        break;
+      default:
+        Serial.println("Unknown error");
+        break;
+    }
   }
 
   Serial.print("ID "); Serial.println(id);
   p = finger.storeModel(id);
-  if (p == FINGERPRINT_OK) {
-    Serial.println("Stored!");
-    delay(1000);
-    rebootSystem();
-  } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
-    Serial.println("Communication error");
-    return p;
-  } else if (p == FINGERPRINT_BADLOCATION) {
-    Serial.println("Could not store in that location");
-    return p;
-  } else if (p == FINGERPRINT_FLASHERR) {
-    Serial.println("Error writing to flash");
-    return p;
-  } else {
-    Serial.println("Unknown error");
-    return p;
+  while(p == FINGERPRINT_OK){
+   switch(p) {
+     case FINGERPRINT_OK:       
+      if(espSerial.available()>0){
+        espSerial.setTimeout(100);                
+        String d = espSerial.readString();
+         if(d.startsWith("done")){
+          d.replace("done","");
+          id = d.toInt();
+        }      
+      }else if(id == 334){
+        espSerial.print("rollFinger,");
+        espSerial.println("noneAction");
+        rebootSystem();          
+      }else{
+        Serial.println("Stored!");
+        currentMillis = millis();
+        if(currentMillis - previousMillis > interval){
+          previousMillis = currentMillis;              
+          espSerial.print("rollFinger,");
+          espSerial.println("enDone");
+        }        
+      }      
+      break;
+     case FINGERPRINT_PACKETRECIEVEERR:
+      Serial.println("Communication error");
+      break;
+     case FINGERPRINT_BADLOCATION:
+      Serial.println("Could not store in that location");
+      break;
+     case FINGERPRINT_FLASHERR:
+      Serial.println("Error writing to flash");
+      break;
+     default:
+      Serial.println("Unknown error");
+      break;
+    }
   }
 }
 //----------------End ENROLL atau mendaftarkan finggerprint--------------
 //----------------Fungsi Scan finggerprint-----------------------
-
 uint8_t getFingerprintID() {
   uint8_t p = finger.getImage();
   switch (p) {
@@ -356,7 +405,8 @@ uint8_t getFingerprintID() {
       break;
     case FINGERPRINT_NOFINGER:
       Serial.println("No finger detected");
-      wifiSerial.print("S");
+      espSerial.print("rollFinger,");
+      espSerial.println("noneAction");
       return p;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
@@ -368,9 +418,8 @@ uint8_t getFingerprintID() {
       Serial.println("Unknown error");
       return p;
   }
-
+  
   // OK success!
-
   p = finger.image2Tz();
   switch (p) {
     case FINGERPRINT_OK:
@@ -436,14 +485,12 @@ int getFingerprintIDez() {
 }
 //--------------------End Scan finggerprint-----------------------
 //------------------Fungsi Delete finggerprint--------------------
-
 void deleteFinger(){
+  delay(1000);
+  finger.begin(57600);
   Serial.println("Please type in the ID # (from 1 to 127) you want to delete...");  
   if (id == 0) {// ID #0 not allowed, try again!
      return;
-  }
-  if (id == 334){
-     rebootSystem(); 
   }  
   Serial.print("Deleting ID #");
   Serial.println(id);
@@ -458,12 +505,16 @@ uint8_t deleteFingerprint(uint8_t id) {
 
   if (p == FINGERPRINT_OK) {    
     Serial.println("Deleted!");
-    delay(1000);    
+    espSerial.flush();    
+    for(int i=0;i<10;i++){
+      espSerial.print("rollFinger,");
+      espSerial.println("noneAction");
+    }        
     rebootSystem();
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     return p;
-  } else if (p == FINGERPRINT_BADLOCATION) {
+  } else if (p == FINGERPRINT_BADLOCATION) {    
     Serial.println("Could not delete in that location");
     return p;
   } else if (p == FINGERPRINT_FLASHERR) {
@@ -484,18 +535,10 @@ int Button() {
   if (buttonState == HIGH) {
     // turn LED on:
     buttonValue = constrain(buttonValue,0,4);
-    buttonValue += i;                
-    Serial.print("Push Button : ");
-    Serial.println(buttonValue);
-                         
-    return buttonValue;
+    buttonValue += i;                                           
   } else {
     // turn LED off:
-    buttonValue = 0;
-    Serial.print("unpush button : ");
-    Serial.println(buttonValue);
-        
-    return buttonValue;     
+    buttonValue = 0;       
   }
 }
 //-------------------End push button---------------------------
@@ -548,79 +591,116 @@ int UltraLeft(){
   return distanceLeft;
 }
 //-------------------End Sensor Ultraasonic------------------------
-//--------------Sensor Soil atau kelembaban surface----------------
-int soilNilai(){
-
-  int soilValue;  
-  int limit = 300; 
-
-  soilValue = analogRead(soilPin); 
-  Serial.println("Analog Value : ");
-  Serial.println(soilValue);
-
-  return soilValue;
-}
-//-------------------End Sensor Soil---------------------------
 //----------------------Fungsi Utama----------------------------
 void mainFunction(){         
-    Serial.print("Fingger ID :");
-    Serial.println(fingerID);
-    //print ultrasonic
-    Serial.print("Distance center: ");
-    Serial.print(UltraFront());
-    Serial.println(" cm"); 
-    Serial.print("Distance right: ");
-    Serial.print(UltraRight());
-    Serial.println(" cm"); 
-    Serial.print("Distance left: ");
-    Serial.print(UltraLeft());
-    Serial.println(" cm");
-    //print soil
-    Serial.print("nilai soil :");
-    Serial.println(soilValue = analogRead(soilPin));                 
-    //kondisi vibrate on
-    if(UltraFront()<100){
-      digitalWrite(vibFront, HIGH); //vibrate          
-    }
-    else{
-      digitalWrite(vibFront, LOW); //stop vibrate
-    }
-    if(UltraRight()<100){
-      digitalWrite(vibRight, HIGH); //vibrate          
-    }else{
-      digitalWrite(vibRight, LOW); //stop vibrate          
-    }
-    if(UltraLeft()<100){
-      digitalWrite(vibLeft, HIGH); //vibrate          
-    }else{
-      digitalWrite(vibLeft, LOW); //stop vibrate          
-    }                 
+  Serial.print("Fingger ID :");
+  Serial.println(fingerID);
+  //print ultrasonic
+  Serial.print("Distance center: ");
+  Serial.print(UltraFront());
+  Serial.println(" cm"); 
+  Serial.print("Distance right: ");
+  Serial.print(UltraRight());
+  Serial.println(" cm"); 
+  Serial.print("Distance left: ");
+  Serial.print(UltraLeft());
+  Serial.println(" cm");
+  //print soil
+  Serial.print("nilai soil :");
+  Serial.println(soilValue = analogRead(soilPin));                 
+  //kondisi vibrate on
+//  if(UltraFront()>100){
+//    digitalWrite(vibFront, LOW); //vibrate          
+//  }else{
+//    digitalWrite(vibFront, HIGH); //stop vibrate
+//  }
+//  if(UltraLeft()>100){
+//    digitalWrite(vibLeft, LOW); //vibrate          
+//  }else{
+//    digitalWrite(vibLeft, HIGH); //stop vibrate          
+//  }
+//  if(UltraRight()>100){
+//    digitalWrite(vibRight, LOW); //vibrate          
+//  }else{
+//    digitalWrite(vibRight, HIGH); //stop vibrate          
+//  }                     
 }
 //-------------------End Fungsi Utama----------------------
 
-void loop() {  
-  wifiSerial.setTimeout(100);
-  fingerID = getFingerprintID();    
-  while(sidikJari){    
-    wifiSerial.print(0xAA); wifiSerial.print(":");
-    wifiSerial.print(dataID); wifiSerial.print(":");
-    wifiSerial.print(100); wifiSerial.print(":");    
-    wifiSerial.println(Button());    
-    Serial.println(dataID);
-    Serial.println("---------------------------------");
-    mainFunction();    
-    delay(100);    
-    while(wifiSerial.available()>0) {
-      String data = wifiSerial.readString();
-      if(data.startsWith("enfinger")){
-        data.replace("enfinger","");
-        id = data.toInt();
-        enrollFinger();           
-      }else if(data.startsWith("delfinger")){
-        data.replace("delfinger","");
-        id = data.toInt();
-        deleteFinger();           
-      }   
+void loop() {        
+  mainFunction();
+  gpsData();    
+  Button();
+  Serial.print("Nilai Button : ");Serial.println(buttonValue);
+  Serial.print("Data Finger : ");Serial.println(dataID);
+  Serial.println("---------------------------------");
+  Serial.print("espFirebase,"+String(gpsStatus)+","+dataID+","+String(buttonValue)+","+"100,");
+  Serial.print(String(latVar,6)+","+String(lngVar,6)+",");
+  Serial.println(dataPulse);
+  // kirim data ke esp8266
+  espSerial.print("espFirebase,"+String(gpsStatus)+","+dataID+","+String(buttonValue)+","+"100,");
+  espSerial.print(String(latVar,6)+","+String(lngVar,6)+",");
+  espSerial.println(dataPulse);  
+  while(pulseSerial.available()){
+    pulseSerial.setTimeout(100);
+    dataPulse = pulseSerial.readString();      
+  }
+  while(espSerial.available()){
+    espSerial.setTimeout(100);
+    String d = espSerial.readString();
+    if(d.startsWith("enfinger")){
+      d.replace("enfinger","");
+      id = d.toInt();      
+      enrollFinger();
+    }else if(d.startsWith("delfinger")){
+      d.replace("delfinger","");
+      id = d.toInt();
+      deleteFinger();
+    }else if(d.startsWith("cancel")){
+      d.replace("cancel","");
+      id = d.toInt();
+    }else if(d == "."){
+      Serial.println("Device dalam proses terkoneksi...");
+    }
+  } 
+}
+
+//----------------------Fungsi upload data GPS--------------------------  
+void gpsData(){
+  while(gpsSerial.available()>0){
+    if (gps.encode(gpsSerial.read())) {
+      Serial.println("---------------Data GPS----------------");
+      tampilkan();   
     }
   }
+  if(millis() > 5000 && gps.charsProcessed() < 10){
+    Serial.println("No GPS detected: check wiring.");
+  }
 }
+//----------------------End Fungsi upload data GPS------------------------ 
+//----------------------Fungsi Show data GPS-----------------------------
+void tampilkan() {
+  Serial.print("Fix : ");Serial.println(gps.location.age());
+  if(gps.location.age()>1500){
+    Serial.print("Location = ");
+    Serial.print(latVar,6);
+    Serial.print(",");
+    Serial.println(lngVar,6);
+    Serial.println("Data GPS lama");
+    gpsStatus = 0;
+  }else if(gps.location.isValid()){
+    latVar = gps.location.lat();
+    lngVar = gps.location.lng();
+    
+    Serial.print("Location = ");
+    Serial.print(latVar,6);
+    Serial.print(",");
+    Serial.println(lngVar,6);
+    gpsStatus = 1;    
+  }else{
+    Serial.println("Lokasi Belum Terbaca");    
+    latVar = 0; lngVar = 0;
+    gpsStatus = 0;
+  }
+}
+//------------------------End Fungsi Show data GPS------------------------

@@ -37,7 +37,7 @@ int l;
 //variable setup device
 char MacAddress[30];
 char ipAddress[40];
-char nameDevice[40] = "Device1_";
+char nameDevice[40] = "Device_";
 char nameLog[30];
 
 int finger, connStatus, gpsStatus;
@@ -82,7 +82,7 @@ void setup() {
     delay(500);
     Serial.print("."); //print "...."
     connStatus = 0;    
-//    deviceStatus();
+    deviceStatus();
   }
   Serial.println("");
   Serial.println("WiFi connected");
@@ -112,11 +112,8 @@ void setup() {
   Serial.println(ipAddress);  // Print the IP address
   Serial.println(MacAddress);  // Print the mac address  
   connStatus = 1;
-//  idAlat();
-  for(int i=0;i<5;i++){
-    Serial.println(i);
-    setLogTime();    
-  }  
+  idAlat();
+  setLogTime();
 }
 
 //---------------Fungsi cek Setup Koneksi--------------------
@@ -171,33 +168,31 @@ void setLogTime(){
   sprintf(currentWaktu,"%02d:%02d",jam,menit);
   sprintf(currentDate,"%02d-%02d-%02d",monthDay,currentMonth,currentYear);
   
-  sprintf(nameLog,"%s_%s",currentDate,currentWaktu);
-
-  Serial.println(nameLog);
+  sprintf(nameLog,"%s_%s",currentDate,currentWaktu);        
   
-//  sprintf(start_nama,"%s/log_data/%s/waktu_mulai",nameDevice,nameLog);
-//  if(Firebase.RTDB.setString(&fbdo, start_nama, currentWaktu)){
-//    sprintf(tanggal_nama,"%s/log_data/%s/tanggal",nameDevice,nameLog);
-//    Firebase.RTDB.setString(&fbdo, tanggal_nama, currentDate);
-//    sprintf(end_nama,"%s/log_data/%s/waktu_berjalan",nameDevice,nameLog);
-//    Firebase.RTDB.setString(&fbdo, end_nama, currentWaktu);
-//    sprintf(selisih,"%s/log_data/%s/selisih_waktu",nameDevice,nameLog);
-//    Firebase.RTDB.setString(&fbdo, selisih, "00:00");
-//    sprintf(bpm_max,"%s/log_data/%s/bpm_max",nameDevice,nameLog);
-//    Firebase.RTDB.setInt(&fbdo, bpm_max, 0);
-//    sprintf(bpm_min,"%s/log_data/%s/bpm_min",nameDevice,nameLog);
-//    Firebase.RTDB.setInt(&fbdo, bpm_min, 0);
-//    sprintf(spo_max,"%s/log_data/%s/spo_max",nameDevice,nameLog);
-//    Firebase.RTDB.setInt(&fbdo, spo_max, 0);
-//    sprintf(spo_min,"%s/log_data/%s/spo_min",nameDevice,nameLog);
-//    Firebase.RTDB.setInt(&fbdo, spo_min, 0);
-//
-//    Serial.println("Set Log Sukses di Upload");    
-//    connStatus = 1;    
-//  }else{
-//    Serial.print("Error in up Log Data, ");
-//    failConnect();    
-//  }
+  sprintf(start_nama,"%s/log_data/%s/waktu_mulai",nameDevice,nameLog);
+  if(Firebase.RTDB.setString(&fbdo, start_nama, currentWaktu)){
+    sprintf(tanggal_nama,"%s/log_data/%s/tanggal",nameDevice,nameLog);
+    Firebase.RTDB.setString(&fbdo, tanggal_nama, currentDate);
+    sprintf(end_nama,"%s/log_data/%s/waktu_berjalan",nameDevice,nameLog);
+    Firebase.RTDB.setString(&fbdo, end_nama, currentWaktu);
+    sprintf(selisih,"%s/log_data/%s/selisih_waktu",nameDevice,nameLog);
+    Firebase.RTDB.setString(&fbdo, selisih, "00:00");
+    sprintf(bpm_max,"%s/log_data/%s/bpm_max",nameDevice,nameLog);
+    Firebase.RTDB.setInt(&fbdo, bpm_max, 0);
+    sprintf(bpm_min,"%s/log_data/%s/bpm_min",nameDevice,nameLog);
+    Firebase.RTDB.setInt(&fbdo, bpm_min, 0);
+    sprintf(spo_max,"%s/log_data/%s/spo_max",nameDevice,nameLog);
+    Firebase.RTDB.setInt(&fbdo, spo_max, 0);
+    sprintf(spo_min,"%s/log_data/%s/spo_min",nameDevice,nameLog);
+    Firebase.RTDB.setInt(&fbdo, spo_min, 0);
+
+    Serial.println("Set Log Sukses di Upload");    
+    connStatus = 1;    
+  }else{
+    Serial.print("Error in up Log Data, ");
+    failConnect();    
+  }
 }
 //---------------End Fungsi Upload Setup data Log Alat--------------------
 //---------------Fungsi Upload Setup data Flag------------------------
@@ -325,13 +320,13 @@ void finggerSetup(){
     if(fbdo.stringData().startsWith("enfinger")){          
       wifiSerial.println(fbdo.stringData());      
       Serial.println("enroll finger");
-      delay(1000);
-      Firebase.RTDB.setDouble(&fbdo,status_fingger, 0);               
+      delay(10000);
+//      Firebase.RTDB.setDouble(&fbdo,status_fingger, 0);               
     }else if(fbdo.stringData().startsWith("delfinger")){          
       wifiSerial.println(fbdo.stringData());      
       Serial.println("delete finger");
-      delay(1000);
-      Firebase.RTDB.setDouble(&fbdo,status_fingger, 0);               
+      delay(10000);
+//      Firebase.RTDB.setDouble(&fbdo,status_fingger, 0);               
     }  
   }else{
     Serial.print("Error in get Fingger, ");
@@ -368,44 +363,44 @@ void deviceStatus(){
 //--------------End Fungsi Status Alat--------------------
 
 void loop() {  
-//  gpsData();
-//  realTime();
-//  deviceStatus();      
-//  //--Read data fingger dari firebase dan mengirimkan ke arduino--
-//  finggerSetup();
-//  //--End Read data dari firebase dan mengirimkan ke arduino--
-//  //--Read data parsing dari arduino--
-//  while(wifiSerial.available()>0) {
-//  //wifiSerial.setTimeout(50);
-//    char inChar = (char)wifiSerial.read();
-//    dataIn += inChar;
-//    if (inChar == '\n'){
-//      parsing = true;
-//    }
-//      else if(inChar == 'S'){      
-//      Serial.println("Scan Fingger");
-//      lcd.setCursor(0,0);
-//      lcd.print("Scan Sidik Jari ");           
-//      yield();
-//    }
-//  }
-//  while(pulseSerial.available()>0){
-//    char inChar2 = (char)pulseSerial.read();
-//    dataIn2 += inChar2;
-//    if (inChar2 == '\n'){
-//      parsing2 = true;
-//    }
-//  }  
-//  if(parsing){
-//    parsingData();    
-//    parsing=false;
-//    dataIn="";       
-//  }         
-//  if(parsing2){
-//    parsingData2();    
-//    parsing2=false;
-//    dataIn2="";       
-//  }
+  gpsData();
+  realTime();
+  deviceStatus();      
+  //--Read data fingger dari firebase dan mengirimkan ke arduino--
+  finggerSetup();
+  //--End Read data dari firebase dan mengirimkan ke arduino--
+  //--Read data parsing dari arduino--
+  while(wifiSerial.available()>0) {
+  //wifiSerial.setTimeout(50);
+    char inChar = (char)wifiSerial.read();
+    dataIn += inChar;
+    if (inChar == '\n'){
+      parsing = true;
+    }
+      else if(inChar == 'S'){      
+      Serial.println("Scan Fingger");
+      lcd.setCursor(0,0);
+      lcd.print("Scan Sidik Jari ");           
+      yield();
+    }
+  }
+  while(pulseSerial.available()>0){
+    char inChar2 = (char)pulseSerial.read();
+    dataIn2 += inChar2;
+    if (inChar2 == '\n'){
+      parsing2 = true;
+    }
+  }  
+  if(parsing){
+    parsingData();    
+    parsing=false;
+    dataIn="";       
+  }         
+  if(parsing2){
+    parsingData2();    
+    parsing2=false;
+    dataIn2="";       
+  }
   //--End Read data parsing dari arduino--
 }
 

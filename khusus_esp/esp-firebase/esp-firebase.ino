@@ -1,119 +1,37 @@
+#include <SoftwareSerial.h>
 #include <Adafruit_Fingerprint.h>
-#include <TinyGPS++.h>
-#include <ArduinoJson.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
 
-//serial tx(16) dan rx (17) untuk nodemcu
-#define wifiSerial Serial2
-
-// serial tx(14) dan rx(15) untuk finggerprint
-#define fpSerial Serial3
-
-//ultrasonic define pin
-#define echoFront A2 //echo pin
-#define trigFront A1 //trig pin
-#define echoRight A4
-#define trigRight A3 
-#define echoLeft A6 
-#define trigLeft A5 
-
-const int soilPin = A0; 
-const int buttonPin = 2;     // the number of the pushbutton pin
-const int buzzer = 9;        // buzzer to arduino pin 9
-const int ledPin =  13;      // the number of the LED pin
-
-//vibration pin
-const int vibFront = 3;
-const int vibRight = 4;
-const int vibLeft = 5;
-
-//variabel timer on alat
-unsigned long milisec;
-unsigned long detik;
-unsigned long menit;
-unsigned long jam;
-
-boolean sidikJari = false;
+SoftwareSerial fpSerial(2,3);//RX,TX
+SoftwareSerial espSerial(4,5);
+//#define fpSerial Serial1
+//#define espSerial Serial2
 
 // id untuk fingerprint
-int id;
+boolean sidikJari = false, enroll = false;
+int id, fingerID;
 String dataID;
-String separator = ",";
-
-// variables will change:
-int buttonState = 0;
-int soilValue;
-int fingerID;
-int fingerValid;
-int buttonValue;
-int kondisi;
-int dataInt;
-int statusDevice;
+String separator = ";";
 
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&fpSerial);
 
-void setup()
-{
-  Serial.begin(9600);
-  wifiSerial.begin(9600);  
-    
-  finger.begin(57600);  
+void setup() {
+  Serial.begin(9600);  
+  
+  finger.begin(57600);
   if (finger.verifyPassword()) {
-    Serial.println("Found fingerprint sensor!");
+    Serial.println("Found fingerprint sensor!");    
+    while(!sidikJari){  
+      fingerID = getFingerprintID();
+    }   
   } else {
     Serial.println("Did not find fingerprint sensor :(");
     while (1) { delay(1); }
   }
-  // cek id fingerprint
-  for (int finger = 1; finger < 10; finger++) {
-    downloadFingerprintTemplate(finger);
-  }
-
-  finger.getTemplateCount();
-
-  if (finger.templateCount == 0) {
-    Serial.print("Sensor doesn't contain any fingerprint data. Please run the 'enroll' example.");
-    id = 1;
-    enrollFinger();    
-  }
-  else {
-    Serial.println("Waiting for valid finger...");
-    Serial.print("Sensor contains "); Serial.print(finger.templateCount); Serial.println(" templates");    
-  }
-
-  // initialize the pushbutton pin and buzzer
-  pinMode(ledPin, OUTPUT);
-  pinMode(buzzer, OUTPUT);  
-  pinMode(buttonPin, INPUT);
-
-  // intialize the vibrate
-  pinMode(vibFront, OUTPUT);
-  pinMode(vibRight, OUTPUT);
-  pinMode(vibLeft, OUTPUT);
-
-  // initialize the ultrasonic
-  pinMode(trigFront, OUTPUT); // Sets the trigPin as an OUTPUT
-  pinMode(echoFront, INPUT); // Sets the echoPin as an INPUT  
-  pinMode(trigRight, OUTPUT); 
-  pinMode(echoRight, INPUT); 
-  pinMode(trigLeft, OUTPUT); 
-  pinMode(echoLeft, INPUT); 
-  
+  espSerial.begin(9600);
 }
 //-----------REBOOT SYSTEM------------
 void(* rebootSystem) (void) = 0;
 
-//--------read input serial---------
-int readnumber(void) {
-  int num = 0;
-
-  while (num == 0) {
-    while (! wifiSerial.available());
-    num = dataInt;
-  }
-  return num;
-}
 //----------------------Cek ID Finger---------------------------------
 uint8_t downloadFingerprintTemplate(uint16_t id)
 {
@@ -147,12 +65,12 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
   }
 
   // one data packet is 267 bytes. in one data packet, 11 bytes are 'usesless' :D
-  uint8_t bytesReceived[534]; // 2 data packets
-  memset(bytesReceived, 0xff, 534);
+  uint8_t bytesReceived[128]; // 2 data packets
+  memset(bytesReceived, 0xff, 128);
 
   uint32_t starttime = millis();
   int i = 0;
-  while (i < 534 && (millis() - starttime) < 20000) {
+  while (i < 128 && (millis() - starttime) < 20000) {
       if (fpSerial.available()) {
           bytesReceived[i++] = fpSerial.read();
       }
@@ -160,12 +78,12 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
 //  Serial.print(i); Serial.println(" bytes read.");
 //  Serial.println("Decoding packet...");
 
-  uint8_t fingerTemplate[512]; // the real template
-  memset(fingerTemplate, 0xff, 512);
+  uint8_t fingerTemplate[128]; // the real template
+  memset(fingerTemplate, 0xff, 128);
 
   // filtering only the data packets
   int uindx = 9, index = 0;
-  while (index < 534) {
+  while (index < 128) {
       while (index < uindx) ++index;
       uindx += 256;
       while (index < uindx) {
@@ -177,18 +95,10 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
   }
 }
 
-void printHex(int num, int precision) {
-    char tmp[16];
-    char format[128];
-
-    sprintf(format, "%%.%dX", precision);
-
-    sprintf(tmp, format, num);
-    Serial.print(tmp);
-}
 //----------------------End Cek ID Finger---------------------------------
 //-------------fungsi ENROLL atau mendaftarkan finggerprint pengguna----------------
-void enrollFinger(){  
+void enrollFinger(){
+  finger.begin(57600);  
   Serial.println("Ready to enroll a fingerprint!");
   Serial.println("Please type in the ID # (from 1 to 127) you want to save this finger as..."); 
   if (id == 0) {// ID #0 not allowed, try again!
@@ -356,7 +266,7 @@ uint8_t getFingerprintID() {
       break;
     case FINGERPRINT_NOFINGER:
       Serial.println("No finger detected");
-      wifiSerial.print("S");
+//      wifiSerial.print("S");
       return p;
     case FINGERPRINT_PACKETRECIEVEERR:
       Serial.println("Communication error");
@@ -412,9 +322,9 @@ uint8_t getFingerprintID() {
   Serial.print("Found ID #"); Serial.print(finger.fingerID);
   Serial.print(" with confidence of "); Serial.println(finger.confidence);  
   sidikJari = true;
-  tone(buzzer, 1000);
-  delay(1000);
-  noTone(buzzer);  
+//  tone(buzzer, 1000);
+//  delay(1000);
+//  noTone(buzzer);  
   return finger.fingerID;
 }
 
@@ -475,152 +385,21 @@ uint8_t deleteFingerprint(uint8_t id) {
   }
 }
 //-------------------End Delete finggerprint----------------------
-//-------------------Fungsi Button Push---------------------------
-int Button() {
-  buttonState = digitalRead(buttonPin);
-  int i = buttonState;   
-  // check if the pushbutton is pressed.
-  // if it is, the buttonState is HIGH:
-  if (buttonState == HIGH) {
-    // turn LED on:
-    buttonValue = constrain(buttonValue,0,4);
-    buttonValue += i;                
-    Serial.print("Push Button : ");
-    Serial.println(buttonValue);
-                         
-    return buttonValue;
-  } else {
-    // turn LED off:
-    buttonValue = 0;
-    Serial.print("unpush button : ");
-    Serial.println(buttonValue);
-        
-    return buttonValue;     
-  }
-}
-//-------------------End push button---------------------------
-//-------------------Fungsi Sensor Ultrasonic------------------
-int UltraFront(){
+
+void loop() {
+//  fingerID = getFingerprintID();    
+//  while(sidikJari){        
+    espSerial.println("hasil,test terima hasil");
   
-  long durationFront; 
-  int distanceFront;  
-
-  // Clears the trigPin condition
-  digitalWrite(trigFront, LOW); delayMicroseconds(2);
-  // Sets the trigPin HIGH (ACTIVE) for 10 microseconds
-  digitalWrite(trigFront, HIGH); delayMicroseconds(10);
-  digitalWrite(trigFront, LOW);    
-  durationFront = pulseIn(echoFront, HIGH);
-  // Calculating the distance
-  distanceFront = durationFront * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)  
-  return distanceFront;
-}
-
-int UltraRight(){
-  
-  long durationRight; 
-  int distanceRight;  
-
-  // Clears the trigPin condition
-  digitalWrite(trigRight, LOW); delayMicroseconds(2);
-  // Sets the trigPin HIGH (ACTIVE) for 10 microseconds
-  digitalWrite(trigRight, HIGH); delayMicroseconds(10);
-  digitalWrite(trigRight, LOW);    
-  durationRight = pulseIn(echoRight, HIGH);
-  // Calculating the distance
-  distanceRight = durationRight * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
-  return distanceRight;
-}
-
-int UltraLeft(){
-  
-  long durationLeft; 
-  int distanceLeft;  
-
-  // Clears the trigPin condition
-  digitalWrite(trigLeft, LOW); delayMicroseconds(2);
-  // Sets the trigPin HIGH (ACTIVE) for 10 microseconds
-  digitalWrite(trigLeft, HIGH); delayMicroseconds(10);
-  digitalWrite(trigLeft, LOW);    
-  durationLeft = pulseIn(echoLeft, HIGH);
-  // Calculating the distance
-  distanceLeft = durationLeft * 0.034 / 2; // Speed of sound wave divided by 2 (go and back)
-  return distanceLeft;
-}
-//-------------------End Sensor Ultraasonic------------------------
-//--------------Sensor Soil atau kelembaban surface----------------
-int soilNilai(){
-
-  int soilValue;  
-  int limit = 300; 
-
-  soilValue = analogRead(soilPin); 
-  Serial.println("Analog Value : ");
-  Serial.println(soilValue);
-
-  return soilValue;
-}
-//-------------------End Sensor Soil---------------------------
-//----------------------Fungsi Utama----------------------------
-void mainFunction(){         
-    Serial.print("Fingger ID :");
-    Serial.println(fingerID);
-    //print ultrasonic
-    Serial.print("Distance center: ");
-    Serial.print(UltraFront());
-    Serial.println(" cm"); 
-    Serial.print("Distance right: ");
-    Serial.print(UltraRight());
-    Serial.println(" cm"); 
-    Serial.print("Distance left: ");
-    Serial.print(UltraLeft());
-    Serial.println(" cm");
-    //print soil
-    Serial.print("nilai soil :");
-    Serial.println(soilValue = analogRead(soilPin));                 
-    //kondisi vibrate on
-    if(UltraFront()<100){
-      digitalWrite(vibFront, HIGH); //vibrate          
-    }
-    else{
-      digitalWrite(vibFront, LOW); //stop vibrate
-    }
-    if(UltraRight()<100){
-      digitalWrite(vibRight, HIGH); //vibrate          
-    }else{
-      digitalWrite(vibRight, LOW); //stop vibrate          
-    }
-    if(UltraLeft()<100){
-      digitalWrite(vibLeft, HIGH); //vibrate          
-    }else{
-      digitalWrite(vibLeft, LOW); //stop vibrate          
-    }                 
-}
-//-------------------End Fungsi Utama----------------------
-
-void loop() {  
-  wifiSerial.setTimeout(100);
-  fingerID = getFingerprintID();    
-  while(sidikJari){    
-    wifiSerial.print(0xAA); wifiSerial.print(":");
-    wifiSerial.print(dataID); wifiSerial.print(":");
-    wifiSerial.print(100); wifiSerial.print(":");    
-    wifiSerial.println(Button());    
-    Serial.println(dataID);
-    Serial.println("---------------------------------");
-    mainFunction();    
-    delay(100);    
-    while(wifiSerial.available()>0) {
-      String data = wifiSerial.readString();
-      if(data.startsWith("enfinger")){
-        data.replace("enfinger","");
-        id = data.toInt();
-        enrollFinger();           
-      }else if(data.startsWith("delfinger")){
-        data.replace("delfinger","");
-        id = data.toInt();
-        deleteFinger();           
-      }   
-    }
-  }
+    // Menampilkan respon dari pemanggilan halaman web
+    while(espSerial.available()){
+      String s = espSerial.readString();
+      if(s.startsWith("enfinger")){
+        s.replace("enfinger","");
+        id = s.toInt();
+        enrollFinger();
+      }
+    }   
+    delay(1000);
+//  }      
 }

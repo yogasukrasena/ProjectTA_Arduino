@@ -11,6 +11,12 @@ int BPM, SPO2;
 int maxBpm, minBpm;
 int maxSpo, minSpo;
 int count;
+
+// variable penerima data dari micro
+String dt2[40];
+String dataIn2;
+boolean parsing2 = false;
+int l;
  
 void onBeatDetected()
 {
@@ -20,7 +26,7 @@ void onBeatDetected()
 void setup()
 {
   Serial.begin(9200);
-  pulseSerial.begin(57600);
+  pulseSerial.begin(115200);
   Serial.print("Initializing pulse oximeter..");
 
   // Initialize the PulseOximeter instance
@@ -66,19 +72,69 @@ void loop()
     Serial.print(" Min Spo2 :");
     Serial.println(minSpo);
     
-//    pulseSerial.println(maxBpm+","+maxSpo);
-
-    pulseSerial.print(0xAA); pulseSerial.print(":");
-    pulseSerial.print(BPM); pulseSerial.print(":");
-    pulseSerial.print(SPO2); pulseSerial.print(":");
-    pulseSerial.print(maxBpm); pulseSerial.print(":");
-    pulseSerial.print(minBpm); pulseSerial.print(":");
-    pulseSerial.print(maxSpo); pulseSerial.print(":");
-    pulseSerial.print(minSpo); pulseSerial.print(":");
-    pulseSerial.println(0xAA);
-    
+//    pulseSerial.println(maxBpm+","+maxSpo);       
   }
+
+   pulseSerial.println("hasil");
+    
+//    while(pulseSerial.available()>0){      
+//      char s = (char)pulseSerial.read();
+//      dataIn2 += s;
+//      if(s == '\n'){
+//        Serial.println();
+//        dataIn2 = ""; 
+//      }      
+//    }
+//  while(pulseSerial.available()>0){
+//    char inChar2 = (char)pulseSerial.read();
+//    dataIn2 += inChar2;
+//    if (inChar2 == '\n'){
+//      parsing2 = true;
+//    }
+//  }   
+//  if(parsing2){
+//    parsingData2();    
+//    parsing2=false;
+//    dataIn2="";       
+//  }
 }
+
+void parsingData2(){
+ int k=1;
+  Serial.println(dataIn2);    
+ //--PARSING SELURUH DATA--
+  dt2[k]="";
+  for(l=1;l<dataIn2.length();l++){
+    if ((dataIn2[l] == ',')){
+      k++;
+      dt2[k]="";
+    }
+    else{
+      dt2[k] = dt2[k] + dataIn2[l];
+    }
+  }
+  //--PRINT DATA YANG TELAH DI PARSING--
+  if(dataIn2 == "hasil,hasil"){
+    Serial.println("mantapp");
+  }
+  Serial.println("--------------Parsing Data----------------");
+  Serial.print("Data 1 (flag) : ");
+  Serial.println(String(dt2[1]));
+  Serial.print("Data 2 (BPM) : ");
+  Serial.println(String(dt2[2]));
+//  Serial.print("Data 3 (SPO2) : ");
+//  Serial.println(dt2[3].toInt());  
+//  Serial.print("Data 4 (maxBpm) : ");
+//  Serial.println(dt2[4].toInt());
+//  Serial.print("Data 5 (minBpm) : ");
+//  Serial.println(dt2[5].toInt());
+//  Serial.print("Data 6 (maxSpo) : ");
+//  Serial.println(dt2[6].toInt());   
+//  Serial.print("Data 7 (minSpo) : ");
+//  Serial.println(dt2[7].toInt());    
+  //--KIRIM DATA KE FIREBASE--
+}
+//----------------------End Fungsi PARSING DATA---------------------------  
 
 void rangeBPM(int data){
   if(maxBpm == NULL && minBpm == NULL){

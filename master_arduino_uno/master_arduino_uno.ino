@@ -1,32 +1,25 @@
 #include <Adafruit_Fingerprint.h>
-#include <TinyGPS++.h>
-#include <ArduinoJson.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include <SoftwareSerial.h>
 
-//serial tx(16) dan rx (17) untuk nodemcu
-#define wifiSerial Serial2
-
-// serial tx(14) dan rx(15) untuk finggerprint
-#define fpSerial Serial3
+SoftwareSerial wifiSerial(6,7); // RX, TX untuk esp8266
+SoftwareSerial fpSerial(4,5); // RX, TX untuk fingerprint
 
 //ultrasonic define pin
-#define echoFront A2 //echo pin
-#define trigFront A1 //trig pin
-#define echoRight A4
-#define trigRight A3 
-#define echoLeft A6 
-#define trigLeft A5 
+#define echoFront A1 //echo pin
+#define trigFront A0 //trig pin
+#define echoRight A3
+#define trigRight A2 
+#define echoLeft A5 
+#define trigLeft A4 
 
-const int soilPin = A0; 
-const int buttonPin = 2;     // the number of the pushbutton pin
-const int buzzer = 9;        // buzzer to arduino pin 9
-const int ledPin =  13;      // the number of the LED pin
+#define soilPin 10 
+#define buttonPin 9
+#define buzzer 8
 
 //vibration pin
-const int vibFront = 3;
-const int vibRight = 4;
-const int vibLeft = 5;
+const int vibFront = 11;
+const int vibRight = 12;
+const int vibLeft = 13;
 
 //variabel timer on alat
 unsigned long milisec;
@@ -66,7 +59,7 @@ void setup()
     while (1) { delay(1); }
   }
   // cek id fingerprint
-  for (int finger = 1; finger < 10; finger++) {
+  for (int finger = 1; finger < 6; finger++) {
     downloadFingerprintTemplate(finger);
   }
 
@@ -82,8 +75,7 @@ void setup()
     Serial.print("Sensor contains "); Serial.print(finger.templateCount); Serial.println(" templates");    
   }
 
-  // initialize the pushbutton pin and buzzer
-  pinMode(ledPin, OUTPUT);
+  // initialize the pushbutton pin and buzzer  
   pinMode(buzzer, OUTPUT);  
   pinMode(buttonPin, INPUT);
 
@@ -147,12 +139,12 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
   }
 
   // one data packet is 267 bytes. in one data packet, 11 bytes are 'usesless' :D
-  uint8_t bytesReceived[534]; // 2 data packets
-  memset(bytesReceived, 0xff, 534);
+  uint8_t bytesReceived[128]; // 2 data packets
+  memset(bytesReceived, 0xff, 128);
 
   uint32_t starttime = millis();
   int i = 0;
-  while (i < 534 && (millis() - starttime) < 20000) {
+  while (i < 128 && (millis() - starttime) < 20000) {
       if (fpSerial.available()) {
           bytesReceived[i++] = fpSerial.read();
       }
@@ -160,12 +152,12 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
 //  Serial.print(i); Serial.println(" bytes read.");
 //  Serial.println("Decoding packet...");
 
-  uint8_t fingerTemplate[512]; // the real template
-  memset(fingerTemplate, 0xff, 512);
+  uint8_t fingerTemplate[128]; // the real template
+  memset(fingerTemplate, 0xff, 128);
 
   // filtering only the data packets
   int uindx = 9, index = 0;
-  while (index < 534) {
+  while (index < 128) {
       while (index < uindx) ++index;
       uindx += 256;
       while (index < uindx) {
