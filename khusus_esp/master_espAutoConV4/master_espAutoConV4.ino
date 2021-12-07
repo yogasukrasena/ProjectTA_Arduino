@@ -21,21 +21,17 @@ const char* password = "shittman"; //password of your wifi
 //variable setup device
 String MacAddress = WiFi.macAddress();
 String nameDevice = "Device_"+MacAddress;
-String ipAddress = WiFi.localIP().toString();
 String nameLog;
 String hasil_parsing;
 //variabel parsing
 String dataIn[100], s;
 
-int finger, connStatus;
+int finger, connStatus; //variable status dan finger
+int startBattery, endBattery;//variable baterai maksimal dan minimal
 
 unsigned long senddataInPrevMillis = 0;
 
 unsigned long count = 0;
-
-/* 1. Define the WiFi credentials */
-#define WIFI_SSID "redmi"
-#define WIFI_PASSWORD "shittman"
 
 /* 2. If work with RTDB, define the RTDB URL and database secret */
 #define DATABASE_URL "taproject-53d6c-default-rtdb.firebaseio.com" //<databaseName>.firebaseio.com or <databaseName>.<region>.firebasedatabase.app
@@ -55,7 +51,20 @@ void setup() {
   Serial.begin(115200); 
   Serial.println();
 
-  connectESP();
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("disconnect0");
+    delay(500);
+  }
+  Serial.println("connect1");
+  delay(1000);
+  Serial.print("Connected with IP: ");
+  Serial.println(WiFi.localIP());  
+  modeESP8266 = 1;
+
+//  connectESP();
 
   Serial.printf("Firebase Client v%s\n\n", FIREBASE_CLIENT_VERSION);
 
@@ -92,13 +101,13 @@ void connectESP(){
   Serial.print("Connecting to Wi-Fi");
   while (WiFi.status() != WL_CONNECTED)
   {
-    Serial.print(".");
+    Serial.println("disconnect0");
     delay(500);
   }
-  Serial.println();
+  Serial.println("connect1");
+  delay(2000);
   Serial.print("Connected with IP: ");
-  Serial.println(WiFi.localIP());
-  ipAddress = WiFi.localIP().toString();
+  Serial.println(WiFi.localIP());  
   modeESP8266 = 1;
 }
 //----------------Cek koneksi yang terhubung-------------------------
@@ -120,12 +129,13 @@ void setFirebase(){
   int monthDay = ptm->tm_mday;  
   int currentMonth = ptm->tm_mon+1; 
   int currentYear = ptm->tm_year+1900;  
-  char currentWaktu[70], currentDate[70];
+  char currentWaktu[70], currentDate[70], currentLog[70];
    
   sprintf(currentWaktu,"%02d:%02d",jam,menit);
-  sprintf(currentDate,"%02d-%02d-%02d",monthDay,currentMonth,currentYear);
+  sprintf(currentLog,"%02d-%02d-%02d", currentYear, currentMonth, monthDay);
+  sprintf(currentDate,"%02d-%02d-%02d", monthDay, currentMonth, currentYear);
 
-  nameLog = nameDevice+"/log_data/"+String(currentDate)+"_"+String(currentWaktu);
+  nameLog = nameDevice+"/log_data/"+String(currentLog)+"_"+String(currentWaktu);
   
   if(Firebase.setString(fbdo,nameDevice+"/device_id", WiFi.macAddress())){
     if(Firebase.getString(fbdo,nameDevice+"/user_pengguna")){
@@ -142,6 +152,13 @@ void setFirebase(){
         Serial.println("data Keluarga Tersedia");
       }
     }
+    if(Firebase.getString(fbdo,nameDevice+"/foto_profile")){
+      if(fbdo.stringData()=="null"){
+        Firebase.setString(fbdo,nameDevice+"/foto_profile", "default_foto");
+      }else{
+        Serial.println("data Foto Tersedia");
+      }
+    }
     if(Firebase.getDouble(fbdo,nameDevice+"/raw_data/GPS_Lat")){
       if(fbdo.doubleData()==0){
         Firebase.setDouble(fbdo, nameDevice+"/raw_data/GPS_Lat", 0);
@@ -155,9 +172,7 @@ void setFirebase(){
       }else{
         Serial.println("data GPS Long Tersedia");
       }
-    }
-    
-    Firebase.setString(fbdo,nameDevice+"/ip_address", ipAddress);
+    }    
     //set flag dataIn    
     Firebase.setInt(fbdo,nameDevice+"/flag_status/status_device", connStatus);
     Firebase.setInt(fbdo,nameDevice+"/flag_status/status_gps", 0);
@@ -177,7 +192,9 @@ void setFirebase(){
     Firebase.setInt(fbdo,nameLog+"/bpm_max", 0);    
     Firebase.setInt(fbdo,nameLog+"/bpm_min", 0);
     Firebase.setInt(fbdo,nameLog+"/spo_max", 0);
-    Firebase.setInt(fbdo,nameLog+"/spo_min", 0);        
+    Firebase.setInt(fbdo,nameLog+"/spo_min", 0);
+    Firebase.setInt(fbdo,nameLog+"/baterai_mulai", 0);
+    Firebase.setInt(fbdo,nameLog+"/baterai_terakhir", 0);
     connStatus = 1;    
   }else{
     Serial.print("Error in up Log data, ");
@@ -203,7 +220,8 @@ void dataRaw(int bpm, int spo2, int battery, String finger){
   if(Firebase.setInt(fbdo, nameDevice+"/raw_data/bpm_level",bpm)){
     Firebase.setInt(fbdo, nameDevice+"/raw_data/spo2_level",spo2);
     Firebase.setInt(fbdo, nameDevice+"/raw_data/battery_level",battery);
-    Firebase.setString(fbdo, nameDevice+"/raw_data/finger_data",finger);      
+    Firebase.setString(fbdo, nameDevice+"/raw_data/finger_data",finger);
+    kalkulasiBaterai(battery);      
     connStatus = 1;
   }else{
     Serial.print("Error in up raw data, ");
@@ -222,7 +240,9 @@ void dataLog(int bpmMax, int bpmMin, int spoMax, int spoMin){
     Firebase.setInt(fbdo,nameLog+"/bpm_max", bpmMax);    
     Firebase.setInt(fbdo,nameLog+"/bpm_min", bpmMin);
     Firebase.setInt(fbdo,nameLog+"/spo_max", spoMax);
-    Firebase.setInt(fbdo,nameLog+"/spo_min", spoMin);    
+    Firebase.setInt(fbdo,nameLog+"/spo_min", spoMin);
+    Firebase.setInt(fbdo,nameLog+"/baterai_mulai", startBattery);
+    Firebase.setInt(fbdo,nameLog+"/baterai_terakhir", endBattery);    
     connStatus = 1;  
   }else{
     Serial.print("Error in up Log, ");
@@ -230,6 +250,7 @@ void dataLog(int bpmMax, int bpmMin, int spoMax, int spoMin){
   }
 }
 //------------------End fungsi kirim data log----------------------
+//------------------Fungsi kirim data GPS-------------------------
 void dataGps(double gpsLat, double gpsLong){
   if(Firebase.setDouble(fbdo, nameDevice+"/raw_data/GPS_Lat",gpsLat)){
     Firebase.setDouble(fbdo, nameDevice+"/raw_data/GPS_Long",gpsLong);    
@@ -239,7 +260,17 @@ void dataGps(double gpsLat, double gpsLong){
     Serial.println(fbdo.errorReason());
   }  
 }
-
+//------------------End Fungsi kirim data GPS-------------------------
+void kalkulasiBaterai(int nilai_baterai){
+  if(startBattery == NULL && endBattery == NULL){
+    startBattery = nilai_baterai;
+    endBattery = nilai_baterai;    
+  }else if(nilai_baterai > startBattery){
+    startBattery = nilai_baterai;
+  }else if(nilai_baterai < endBattery){
+    endBattery = nilai_baterai;
+  }
+}
 //------------Fungsi Read dataIn Setting Fingger Alat----------------
 void finggerSetup(){ 
   if(Firebase.getString(fbdo,nameDevice+"/flag_status/status_finger")){
