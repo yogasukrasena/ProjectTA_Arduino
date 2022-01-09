@@ -103,6 +103,7 @@ void setup() {
     Serial.print("Sensor doesn't contain any fingerprint data. Please run the 'enroll' example.");
     fingerID = 0; dataID = "0";
     myDFPlayer.play(18); delay(5000);//memutar sound   
+    finger.LEDoff();
   }else {
     // cek id fingerprint  
     cekFinger();
@@ -110,8 +111,9 @@ void setup() {
     Serial.print("Sensor contains "); 
     Serial.print(finger.templateCount); 
     Serial.println(" templates");
-    myDFPlayer.play(2);  delay(1000);//memutar sound
+    myDFPlayer.play(2);  delay(1000);//memutar sound    
     if (finger.verifyPassword()) {
+      finger.LEDon();      
       Serial.println("Found fingerprint sensor!");           
       while(!sidikJari){
         espSerial.print("rollFinger,");
@@ -216,7 +218,8 @@ uint8_t downloadFingerprintTemplate(uint16_t id)
 //-------------fungsi ENROLL atau mendaftarkan finggerprint pengguna----------------
 void enrollFinger(){
   delay(1000);
-  finger.begin(57600);  
+  finger.begin(57600);
+  finger.LEDon();  
   Serial.println("Ready to enroll a fingerprint!");
   Serial.println("Please type in the ID # (from 1 to 127) you want to save this finger as..."); 
   myDFPlayer.play(6); delay(1000);//memutar sound
@@ -287,7 +290,7 @@ uint8_t getFingerprintEnroll() {
     default:
       Serial.println("Unknown error");
       statusFinger = 3;
-      myDFPlayer.play(8);  delay(1000);//memutar sound
+      myDFPlayer.play(8);  delay(1000);//memutar sound      
       return p;
   }
 
@@ -345,16 +348,19 @@ uint8_t getFingerprintEnroll() {
       Serial.println("Could not find fingerprint features");
       statusFinger = 3;
       myDFPlayer.play(8);  delay(1000);//memutar sound
+      finger.LEDoff();
       return p;
     case FINGERPRINT_INVALIDIMAGE:
       Serial.println("Could not find fingerprint features");
       statusFinger = 3;
       myDFPlayer.play(8);  delay(1000);//memutar sound
+      finger.LEDoff();
       return p;
     default:
       Serial.println("Unknown error");
       statusFinger = 3;
       myDFPlayer.play(8);  delay(1000);//memutar sound
+      finger.LEDoff();
       return p;
   }
 
@@ -372,11 +378,13 @@ uint8_t getFingerprintEnroll() {
     Serial.println("Fingerprints did not match");
     statusFinger = 3;
     myDFPlayer.play(8);  delay(1000);//memutar sound
+    finger.LEDoff();
     return p;
   } else {
     Serial.println("Unknown error");
     statusFinger = 3;
     myDFPlayer.play(8);  delay(1000);//memutar sound
+    finger.LEDoff();
     return p;
   }
 
@@ -387,34 +395,39 @@ uint8_t getFingerprintEnroll() {
     Serial.println("Stored!");
     statusFinger = 1;
     cekFinger();    
-    myDFPlayer.play(7);  delay(1000);//memutar sound    
+    myDFPlayer.play(7);  delay(1000);//memutar sound
+    finger.LEDoff();    
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
     statusFinger = 3;
-    myDFPlayer.play(8);  delay(1000);//memutar sound    
+    myDFPlayer.play(8);  delay(1000);//memutar sound
+    finger.LEDoff();    
     return p;
   } else if (p == FINGERPRINT_BADLOCATION) {
     Serial.println("Could not store in that location");
     statusFinger = 3;
-    myDFPlayer.play(8);  delay(1000);//memutar sound    
+    myDFPlayer.play(8);  delay(1000);//memutar sound
+    finger.LEDoff();    
     return p;
   } else if (p == FINGERPRINT_FLASHERR) {
     Serial.println("Error writing to flash");
-    myDFPlayer.play(8);  delay(1000);//memutar sound    
+    myDFPlayer.play(8);  delay(1000);//memutar sound
+    finger.LEDoff();    
     statusFinger = 3;
     return p;
   } else {
     Serial.println("Unknown error");
     statusFinger = 3;
-    myDFPlayer.play(8);  delay(1000);//memutar sound    
+    myDFPlayer.play(8);  delay(1000);//memutar sound
+    finger.LEDoff();    
     return p;
   }
   return true;
 }
 //----------------End ENROLL atau mendaftarkan finggerprint--------------
 //----------------Fungsi Scan finggerprint-----------------------
-uint8_t getFingerprintID() {
-  uint8_t p = finger.getImage();
+uint8_t getFingerprintID() {  
+  uint8_t p = finger.getImage();  
   switch (p) {
     case FINGERPRINT_OK:
       Serial.println("Image taken");
@@ -484,8 +497,9 @@ uint8_t getFingerprintID() {
   Serial.print("Found ID #"); Serial.print(finger.fingerID);
   Serial.print(" with confidence of "); Serial.println(finger.confidence);  
   sidikJari = true;
-  statusFinger = 0;
+  statusFinger = 0;      
   myDFPlayer.play(4);  delay(4000);//memutar sound pertama          
+  finger.LEDoff();
   return finger.fingerID;
 }
 
@@ -510,13 +524,14 @@ int getFingerprintIDez() {
 void deleteFinger(){
   delay(1000);
   finger.begin(57600);
+  finger.LEDon();
   Serial.println("Please type in the ID # (from 1 to 127) you want to delete...");  
   if (id == 0) {// ID #0 not allowed, try again!
      return;
   }  
   Serial.print("Deleting ID #");
   Serial.println(id);
-  myDFPlayer.play(9);  delay(5000);//memutar sound    
+//  myDFPlayer.play(9);  delay(5000);//memutar sound    
   
   deleteFingerprint(id);    
 }
@@ -529,28 +544,33 @@ uint8_t deleteFingerprint(uint8_t id) {
   if (p == FINGERPRINT_OK) {
     dataID = "";
     Serial.println("Deleted!");
-    statusFinger = 2;
+    statusFinger = 2;    
     myDFPlayer.play(10);  delay(1000);//memutar sound    
+    finger.LEDoff();
     cekFinger();        
   } else if (p == FINGERPRINT_PACKETRECIEVEERR) {
     Serial.println("Communication error");
-    statusFinger = 3;
+    statusFinger = 3;    
     myDFPlayer.play(11);  delay(1000);//memutar sound    
+    finger.LEDoff();
     return p;
   } else if (p == FINGERPRINT_BADLOCATION) {
     Serial.println("Could not delete in that location");
-    statusFinger = 3;
+    statusFinger = 3;    
     myDFPlayer.play(11);  delay(1000);//memutar sound    
+    finger.LEDoff();
     return p;
   } else if (p == FINGERPRINT_FLASHERR) {
     Serial.println("Error writing to flash");
-    statusFinger = 3;
+    statusFinger = 3;    
     myDFPlayer.play(11);  delay(1000);//memutar sound    
+    finger.LEDoff();
     return p;
   } else {
     Serial.print("Unknown error: 0x"); Serial.println(p, HEX);
-    statusFinger = 3;
+    statusFinger = 3;    
     myDFPlayer.play(11);  delay(1000);//memutar sound    
+    finger.LEDoff();
     return p;
   }
 }
@@ -659,7 +679,7 @@ void batteryHabis(){
 //-------------------Mengatur ritme getaran soil sesuai kondisi-----------
 void holdVibrate(){
   //mengatur ritme getaran soil
-  if(soilValue < 990 && soilValue > 800){ //kondisi basah biasa
+  if(soilValue < 960 && soilValue > 800){ //kondisi basah biasa
     currentMillis2 = millis();
     if(currentMillis2 - previousMillis2 > interval2){
       previousMillis2 = currentMillis2; 
@@ -713,7 +733,7 @@ void loop() {
     previousMillis = currentMillis;              
     espSerial.print("espFirebase,"+String(gpsStatus)+","+String(statusFinger)+","+dataID+","+String(buttonValue)+","+String(batteryPercent())+",");
     espSerial.print(String(latVar,6)+","+String(lngVar,6)+",");
-    espSerial.println(dataPulse);
+    espSerial.println(dataPulse);   
     Serial.println("data terkirim ke esp");
   }
   //kumpulan kondisi alat

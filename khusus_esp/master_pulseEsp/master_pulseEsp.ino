@@ -32,7 +32,8 @@ void setup()
       for(;;);
   } else {
       Serial.println("SUCCESS");
-  }        
+  }
+  pox.setIRLedCurrent(MAX30100_LED_CURR_14_2MA);
 }
  
 void loop(){  
